@@ -1,20 +1,24 @@
-# Salesforce to TechFino Lead Creation Proxy
+# Salesforce to Multi-Lender (NBFC) Gateway
 
-A secure middleware proxy hosted on Google Cloud Run that receives lead payloads from Salesforce via Bearer token authentication, forwards them to the TechFino API using Basic Auth and API Key credentials, and returns the response back to Salesforce synchronously.
+A config-driven middleware gateway hosted on Google Cloud Run that receives lead payloads from Salesforce via Bearer token authentication, dynamically routes them to the appropriate NBFC/Lender (e.g. **TechFino**, **Auxilo**), and synchronously relays the response back to Salesforce.
 
 ---
 
 ## Live Production Endpoint
 
 - **Base URL:** `https://techfino-lead-proxy-691340529229.asia-southeast1.run.app`
-- **Lead Creation Endpoint:** `POST https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads`
-- **Health Check Endpoint:** `GET https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/health`
+- **Dynamic Routing Endpoint:** `POST https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads`
+- **Lender-Specific Endpoints:**
+  - `POST https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/techfino`
+  - `POST https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/auxilo`
+- **Supported Lenders List:** `GET https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/lenders`
+- **Health Check:** `GET https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/health`
 
 ---
 
 ## Authentication
 
-All requests from Salesforce must include the `Authorization` header with a valid Bearer token:
+All requests from Salesforce must provide the Bearer token in the `Authorization` header:
 
 ```http
 Authorization: Bearer nxtwave_sf_lead_sec_7f9b8c2d1e04a6b8
@@ -23,38 +27,74 @@ Content-Type: application/json
 
 ---
 
-## Request & Response Flow
+## Dynamic Routing Mechanisms
 
+Salesforce can specify the target lender in any of these ways:
+
+### 1. In the JSON Payload (Recommended)
+Add `"lender": "TECHFINO"` or `"lender": "AUXILO"` directly in the request body:
+```json
+{
+  "lender": "TECHFINO",
+  "order_id": "LSPfb3b6229e1e1wd044e475b0f3d5a",
+  "amount": 87500,
+  "course_name": "BCOM",
+  "name": "Amit Chand"
+}
 ```
-Salesforce
-   │
-   │  POST /api/leads (Bearer Token + JSON Payload)
-   ▼
-Cloud Run Proxy (techfino-lead-proxy)
-   │
-   │  POST https://api.techfino.in/api/v2/techfino/lead/create
-   │  (Basic Auth: NxtWave_Disruptive + apiKey: DWMoesFmwH...)
-   ▼
-TechFino Partner API
-   │
-   │  JSON Response (Loan ID, Redirection URL, etc.)
-   ▼
-Cloud Run Proxy (techfino-lead-proxy)
-   │
-   │  Synchronous Relay
-   ▼
-Salesforce
-```
+*(Also supports aliases: `"nbfc": "..."` or `"partner": "..."`. If omitted, defaults to `TECHFINO`)*
+
+### 2. In the URL Path
+- `POST /api/leads/techfino`
+- `POST /api/leads/auxilo`
+
+### 3. In the Query String
+- `POST /api/leads?lender=auxilo`
+
+### 4. In a Custom Header
+- `X-Lender: AUXILO`
 
 ---
 
-## Example cURL Request
+## Architecture & Configuration
 
+The service is fully config-driven via `config/lenders.js`:
+
+```javascript
+{
+  TECHFINO: {
+    apiUrl: 'https://api.techfino.in/api/v2/techfino/lead/create',
+    authType: 'BASIC_AND_APIKEY',
+    credentials: { username, password, apiKey }
+  },
+  AUXILO: {
+    apiUrl: process.env.AUXILO_API_URL,
+    authType: process.env.AUXILO_AUTH_TYPE || 'BEARER',
+    credentials: {
+      token: process.env.AUXILO_API_TOKEN,
+      apiKey: process.env.AUXILO_API_KEY
+    }
+  }
+}
+```
+
+### When Auxilo is Ready:
+You only need to supply the environment variables in Google Cloud Run (no code changes needed):
+- `AUXILO_API_URL`: Auxilo lead creation endpoint
+- `AUXILO_API_TOKEN` or `AUXILO_API_KEY`: Authentication credentials
+- `AUXILO_AUTH_TYPE`: `BEARER` (default), `API_KEY`, or `BASIC`
+
+---
+
+## Example Requests
+
+### Test TechFino
 ```bash
 curl -X POST "https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads" \
   -H "Authorization: Bearer nxtwave_sf_lead_sec_7f9b8c2d1e04a6b8" \
   -H "Content-Type: application/json" \
   -d '{
+    "lender": "TECHFINO",
     "order_id": "LSPfb3b6229e1e1wd044e475b0f3d5a",
     "amount": 87500,
     "course_price": 87500,
@@ -72,12 +112,14 @@ curl -X POST "https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/a
   }'
 ```
 
-### Sample Response Received:
-```json
-{
-  "ReferenceNumber": "LSPfb3b6229e1e1wd044e475b0f3d5a",
-  "unique_loan_id": "LD-143-UNE-292890",
-  "redirection_url": "https://tiny.techfino.in?tbzbsaoZO",
-  "response_code": "200"
-}
+### Test Auxilo
+```bash
+curl -X POST "https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/auxilo" \
+  -H "Authorization: Bearer nxtwave_sf_lead_sec_7f9b8c2d1e04a6b8" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "order_id": "LSPfb3b6229e1e1wd044e475b0f3d5a",
+    "amount": 87500
+  }'
 ```
+*(If Auxilo endpoint is not yet configured, returns HTTP 503 informing that `AUXILO_API_URL` needs to be set)*

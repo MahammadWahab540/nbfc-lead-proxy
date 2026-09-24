@@ -1,0 +1,12 @@
+{
+  "name": "salesforce-techfino-lead-proxy",
+  "version": "1.0.0",
+  "description": "Secure Bearer token protected proxy service between Salesforce and TechFino Lead Creation API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

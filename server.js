@@ -54,7 +54,7 @@ function authenticateBearerToken(req, res, next) {
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
-    service: 'salesforce-multi-lender-proxy',
+    service: 'nbfc-lead-proxy',
     uptime: process.uptime(),
     supportedLenders: getSupportedLenders(),
     timestamp: new Date().toISOString()

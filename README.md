@@ -6,13 +6,13 @@ A config-driven middleware gateway hosted on Google Cloud Run that receives lead
 
 ## Live Production Endpoint
 
-- **Base URL:** `https://techfino-lead-proxy-691340529229.asia-southeast1.run.app`
-- **Dynamic Routing Endpoint:** `POST https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads`
+- **Base URL:** `https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app`
+- **Dynamic Routing Endpoint:** `POST https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads`
 - **Lender-Specific Endpoints:**
-  - `POST https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/techfino`
-  - `POST https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/auxilo`
-- **Supported Lenders List:** `GET https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/lenders`
-- **Health Check:** `GET https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/health`
+  - `POST https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/techfino`
+  - `POST https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/auxilo`
+- **Supported Lenders List:** `GET https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/lenders`
+- **Health Check:** `GET https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/health`
 
 ---
 
@@ -90,7 +90,7 @@ You only need to supply the environment variables in Google Cloud Run (no code c
 
 ### Test TechFino
 ```bash
-curl -X POST "https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads" \
+curl -X POST "https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads" \
   -H "Authorization: Bearer nxtwave_sf_lead_sec_7f9b8c2d1e04a6b8" \
   -H "Content-Type: application/json" \
   -d '{
@@ -114,7 +114,7 @@ curl -X POST "https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/a
 
 ### Test Auxilo
 ```bash
-curl -X POST "https://techfino-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/auxilo" \
+curl -X POST "https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/auxilo" \
   -H "Authorization: Bearer nxtwave_sf_lead_sec_7f9b8c2d1e04a6b8" \
   -H "Content-Type: application/json" \
   -d '{

@@ -1,8 +1,10 @@
 /**
  * Lender / NBFC Configuration Registry
  * 
- * To add a new lender (e.g., PROPELLD, LIQUILOANS, AVANSE), simply add
- * an entry here with its API endpoint, authentication type, and credential mapping.
+ * Config-driven architecture supporting:
+ * - TECHFINO (TechFino Capital Private Limited)
+ * - JODO_FLEX (Jodo Flex - Jodo Pay)
+ * - AUXILO (Auxilo Finserve Private Limited)
  */
 
 const lendersConfig = {
@@ -11,11 +13,26 @@ const lendersConfig = {
     name: 'TechFino Capital Private Limited',
     enabled: true,
     apiUrl: process.env.TECHFINO_API_URL || 'https://api.techfino.in/api/v2/techfino/lead/create',
-    authType: 'BASIC_AND_APIKEY', // Requires Basic Auth + apiKey header
+    authType: 'BASIC_AND_APIKEY',
     credentials: {
       username: process.env.TECHFINO_USERNAME || 'NxtWave_Disruptive',
       password: process.env.TECHFINO_PASSWORD || 'SwUMythn9xSrvDKv8Uct6rcSzYtIc9Q0LV0xW59Jl3ZHPdOTc2',
       apiKey: process.env.TECHFINO_API_KEY || 'DWMoesFmwHqiAukv2XPAAfEh1J8e2GMd6WijCVKUIFMNzpdBAq'
+    }
+  },
+
+  JODO_FLEX: {
+    id: 'JODO_FLEX',
+    name: 'Jodo Flex (Jodo Pay)',
+    enabled: true,
+    apiUrl: process.env.JODO_BASE_URL || 'https://ext.devtest1.jodopay.com',
+    authUrl: process.env.JODO_AUTH_URL || 'https://api.devtest1.jodopay.com',
+    customerUrl: process.env.JODO_CUSTOMER_URL || 'https://app.devtest1.jodopay.com',
+    authType: 'BASIC',
+    credentials: {
+      clientKey: process.env.JODO_CLIENT_KEY || '0bb3f567a9da',
+      clientSecret: process.env.JODO_CLIENT_SECRET || 'fbd75079-5f3f-4739-89f2-3777de00514b',
+      slug: process.env.JODO_SLUG || 'nxtwave'
     }
   },
 
@@ -24,7 +41,7 @@ const lendersConfig = {
     name: 'Auxilo Finserve Private Limited',
     enabled: true,
     apiUrl: process.env.AUXILO_API_URL || '',
-    authType: process.env.AUXILO_AUTH_TYPE || 'BEARER', // Options: BEARER, API_KEY, BASIC
+    authType: process.env.AUXILO_AUTH_TYPE || 'BEARER',
     credentials: {
       token: process.env.AUXILO_API_TOKEN || '',
       apiKey: process.env.AUXILO_API_KEY || '',
@@ -43,12 +60,15 @@ function getLenderConfig(lenderInput) {
     return { key: 'TECHFINO', config: lendersConfig.TECHFINO };
   }
 
-  const normalized = lenderInput.toString().trim().toUpperCase();
+  const normalized = lenderInput.toString().trim().toUpperCase().replace(/[^A-Z0-9]/g, '_');
 
   // Alias mappings
   const aliases = {
     'TECHFINO': 'TECHFINO',
     'TECH_FINO': 'TECHFINO',
+    'JODO': 'JODO_FLEX',
+    'JODO_FLEX': 'JODO_FLEX',
+    'JODOFLEX': 'JODO_FLEX',
     'AUXILO': 'AUXILO',
     'AUXILO_FINSERVE': 'AUXILO'
   };

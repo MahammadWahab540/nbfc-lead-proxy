@@ -1,6 +1,6 @@
 # Salesforce to Multi-Lender (NBFC) Gateway
 
-A config-driven middleware gateway hosted on Google Cloud Run that receives lead payloads from Salesforce via Bearer token authentication, dynamically routes them to the appropriate NBFC/Lender (e.g. **TechFino**, **Auxilo**), and synchronously relays the response back to Salesforce.
+A config-driven middleware gateway hosted on Google Cloud Run that receives lead payloads from Salesforce via Bearer token authentication, dynamically routes them to the appropriate NBFC/Lender (**TechFino**, **Jodo Flex**, **Auxilo**), transforms payloads as required by each NBFC, and synchronously relays the response back to Salesforce.
 
 ---
 
@@ -10,6 +10,7 @@ A config-driven middleware gateway hosted on Google Cloud Run that receives lead
 - **Dynamic Routing Endpoint:** `POST https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads`
 - **Lender-Specific Endpoints:**
   - `POST https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/techfino`
+  - `POST https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/jodo_flex`
   - `POST https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/auxilo`
 - **Supported Lenders List:** `GET https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/lenders`
 - **Health Check:** `GET https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/health`
@@ -27,99 +28,93 @@ Content-Type: application/json
 
 ---
 
-## Dynamic Routing Mechanisms
+## Jodo Flex Integration Details
 
-Salesforce can specify the target lender in any of these ways:
-
-### 1. In the JSON Payload (Recommended)
-Add `"lender": "TECHFINO"` or `"lender": "AUXILO"` directly in the request body:
+### Inbound from Salesforce:
 ```json
 {
-  "lender": "TECHFINO",
-  "order_id": "LSPfb3b6229e1e1wd044e475b0f3d5a",
-  "amount": 87500,
-  "course_name": "BCOM",
-  "name": "Amit Chand"
+  "NBFC_name": "Jodo_flex",
+  "fullname": "Wahab Mar 17",
+  "identifier": "6bae17ab-0ea4-4daf-9d73-bb0e62eaea7e",
+  "product": "IIT-KGP-OCN",
+  "date_of_birth": "2000-01-15",
+  "primary_contact_name": "VIJAYA SREE PULIPAKA",
+  "primary_contact_number": "9966891140",
+  "primary_contact_email": "test@gmail.com",
+  "Tenure": "12"
 }
 ```
-*(Also supports aliases: `"nbfc": "..."` or `"partner": "..."`. If omitted, defaults to `TECHFINO`)*
 
-### 2. In the URL Path
-- `POST /api/leads/techfino`
-- `POST /api/leads/auxilo`
+### Grade Resolution Logic (Config-driven):
+The grade is dynamically derived from `product` + `Tenure`:
 
-### 3. In the Query String
-- `POST /api/leads?lender=auxilo`
+| Product | Salesforce Tenure | Jodo Grade Code |
+|---|---|---|
+| `IIT-KGP-OCN` | `3` | `IITKGPOCN_-_3_EMI` |
+| `IIT-KGP-OCN` | `6` | `IITKGPOCN_-_6_EMI` |
+| `IIT-KGP-OCN` | `9` | `IITKGPOCN_-_9_EMI` |
+| `IIT-KGP-OCN` | `12` | `IITKGPOCN_-_12_EMI` |
+| `IIT-KGP-OCN` | `18` | `IITKGPOCN_-_18_EMI` |
 
-### 4. In a Custom Header
-- `X-Lender: AUXILO`
+### Fee Configuration (Config-driven):
+Managed in `config/jodoProductConfig.js`:
+- Course Fee: `137000.0`
+- Registration Fee: `0.0`
 
----
-
-## Architecture & Configuration
-
-The service is fully config-driven via `config/lenders.js`:
-
-```javascript
+### Response Returned to Salesforce:
+```json
 {
-  TECHFINO: {
-    apiUrl: 'https://api.techfino.in/api/v2/techfino/lead/create',
-    authType: 'BASIC_AND_APIKEY',
-    credentials: { username, password, apiKey }
-  },
-  AUXILO: {
-    apiUrl: process.env.AUXILO_API_URL,
-    authType: process.env.AUXILO_AUTH_TYPE || 'BEARER',
-    credentials: {
-      token: process.env.AUXILO_API_TOKEN,
-      apiKey: process.env.AUXILO_API_KEY
-    }
-  }
+  "status": "success",
+  "NBFC_name": "Jodo_flex",
+  "identifier": "6bae17ab-0ea4-4daf-9d73-bb0e62eaea7e",
+  "jodo_student_id": 187987,
+  "registration_id": 7580,
+  "grade": "IITKGPOCN_-_12_EMI",
+  "redirection_url": "https://app.devtest1.jodopay.com/consumer/login-redirect?access_token=...",
+  "access_token": "...",
+  "response_code": "200"
 }
 ```
 
-### When Auxilo is Ready:
-You only need to supply the environment variables in Google Cloud Run (no code changes needed):
-- `AUXILO_API_URL`: Auxilo lead creation endpoint
-- `AUXILO_API_TOKEN` or `AUXILO_API_KEY`: Authentication credentials
-- `AUXILO_AUTH_TYPE`: `BEARER` (default), `API_KEY`, or `BASIC`
-
 ---
 
-## Example Requests
+## Example cURL Requests
 
-### Test TechFino
+### 1. Test Jodo Flex
+```bash
+curl -X POST "https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads" \
+  -H "Authorization: Bearer nxtwave_sf_lead_sec_7f9b8c2d1e04a6b8" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "NBFC_name": "Jodo_flex",
+    "fullname": "Wahab Mar 17",
+    "identifier": "6bae17ab-0ea4-4daf-9d73-bb0e62eaea7e",
+    "product": "IIT-KGP-OCN",
+    "date_of_birth": "2000-01-15",
+    "primary_contact_name": "VIJAYA SREE PULIPAKA",
+    "primary_contact_number": "9966891140",
+    "primary_contact_email": "test@gmail.com",
+    "Tenure": "12"
+  }'
+```
+
+### 2. Test TechFino
 ```bash
 curl -X POST "https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads" \
   -H "Authorization: Bearer nxtwave_sf_lead_sec_7f9b8c2d1e04a6b8" \
   -H "Content-Type: application/json" \
   -d '{
     "lender": "TECHFINO",
-    "order_id": "LSPfb3b6229e1e1wd044e475b0f3d5a",
+    "order_id": "f1deb9ad-4550-498a-b158-ba412ef78dc8",
+    "name": "Mahammad",
+    "mobile_num": "6301792476",
+    "e_mail": "mohdwahabg@gmail.com",
     "amount": 87500,
-    "course_price": 87500,
-    "course_name": "BCOM",
-    "e_mail": "hschaudhary1980@gmail.com",
-    "universityName": "",
-    "mobile_num": "9811651139",
+    "course_price": 160000,
+    "course_name": "Smart",
+    "duration": 12,
+    "courseTenure": "36",
     "branch": "623",
-    "name": "Amit Chand",
-    "courseTenure": "6",
-    "flexiTenure": "LESSER_THAN_EQUAL",
-    "user_uid": "5309643",
-    "duration": 6,
-    "waiveConsent": "yes"
+    "user_uid": "a03fv00000VUdOiAAL"
   }'
 ```
-
-### Test Auxilo
-```bash
-curl -X POST "https://nbfc-lead-proxy-691340529229.asia-southeast1.run.app/api/leads/auxilo" \
-  -H "Authorization: Bearer nxtwave_sf_lead_sec_7f9b8c2d1e04a6b8" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "order_id": "LSPfb3b6229e1e1wd044e475b0f3d5a",
-    "amount": 87500
-  }'
-```
-*(If Auxilo endpoint is not yet configured, returns HTTP 503 informing that `AUXILO_API_URL` needs to be set)*

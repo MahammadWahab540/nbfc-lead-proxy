@@ -89,6 +89,7 @@ async function handleLeadCreation(req, res) {
   const lenderInput = req.params.lender ||
                       payload.lender ||
                       payload.nbfc ||
+                      payload.NBFC_name ||
                       payload.partner ||
                       req.query.lender ||
                       req.headers['x-lender'] ||

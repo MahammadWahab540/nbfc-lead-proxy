@@ -25,13 +25,13 @@ const lendersConfig = {
     id: 'JODO_FLEX',
     name: 'Jodo Flex (Jodo Pay)',
     enabled: true,
-    apiUrl: process.env.JODO_BASE_URL || 'https://ext.devtest1.jodopay.com',
-    authUrl: process.env.JODO_AUTH_URL || 'https://api.devtest1.jodopay.com',
-    customerUrl: process.env.JODO_CUSTOMER_URL || 'https://app.devtest1.jodopay.com',
+    apiUrl: process.env.JODO_BASE_URL || 'https://ext.jodo.in',
+    authUrl: process.env.JODO_AUTH_URL || 'https://api.jodo.in',
+    customerUrl: process.env.JODO_CUSTOMER_URL || 'https://app.jodo.in',
     authType: 'BASIC',
     credentials: {
-      clientKey: process.env.JODO_CLIENT_KEY || '0bb3f567a9da',
-      clientSecret: process.env.JODO_CLIENT_SECRET || 'fbd75079-5f3f-4739-89f2-3777de00514b',
+      clientKey: process.env.JODO_CLIENT_KEY || '3c0b31e987f1',
+      clientSecret: process.env.JODO_CLIENT_SECRET || '0a4b0b3a-def6-4ae8-9ced-b66175a4c45f',
       slug: process.env.JODO_SLUG || 'nxtwave'
     }
   },

@@ -39,13 +39,23 @@ const productGradeMap = {
   }
 };
 
+const tenureFeeMap = {
+  '3': 82000.0,
+  '6': 82000.0,
+  '9': 91840.0,
+  '12': 93480.0,
+  '18': 99220.0
+};
+
 const feeComponentConfig = {
   'IIT-KGP-OCN': {
-    course_fee: 137000.0,
+    tenure_fees: { ...tenureFeeMap },
+    default_course_fee: 82000.0,
     registration_fee: 0.0
   },
   'DEFAULT': {
-    course_fee: 137000.0,
+    tenure_fees: { ...tenureFeeMap },
+    default_course_fee: 82000.0,
     registration_fee: 0.0
   }
 };
@@ -76,11 +86,18 @@ function resolveJodoGrade(product, tenure) {
  */
 function resolveFeeComponents(product, tenure, overrideCourseFee = null) {
   const normalizedProduct = (product || 'DEFAULT').toString().trim().toUpperCase();
+  const normalizedTenure = tenure ? tenure.toString().trim().replace(/[^0-9]/g, '') : '';
   const baseConfig = feeComponentConfig[normalizedProduct] || feeComponentConfig['DEFAULT'];
 
-  const courseFee = (overrideCourseFee !== null && !isNaN(Number(overrideCourseFee)))
-    ? Number(overrideCourseFee)
-    : baseConfig.course_fee;
+  let courseFee;
+  if (baseConfig.tenure_fees && baseConfig.tenure_fees[normalizedTenure] !== undefined) {
+    // Tenure-based repayment/course fee mapping has priority
+    courseFee = baseConfig.tenure_fees[normalizedTenure];
+  } else if (overrideCourseFee !== null && !isNaN(Number(overrideCourseFee))) {
+    courseFee = Number(overrideCourseFee);
+  } else {
+    courseFee = baseConfig.default_course_fee || 82000.0;
+  }
 
   return [
     {
@@ -89,7 +106,7 @@ function resolveFeeComponents(product, tenure, overrideCourseFee = null) {
     },
     {
       component_type: 'REGISTRATION_FEE',
-      fee_amount: baseConfig.registration_fee
+      fee_amount: baseConfig.registration_fee || 0.0
     }
   ];
 }

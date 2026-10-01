@@ -78,7 +78,10 @@ async function handleJodoFlex(config, payload) {
   const identifier = payload.identifier || payload.order_id || payload.user_uid || '';
   const product = payload.product || payload.course_name || 'IIT-KGP-OCN';
   const tenure = payload.Tenure || payload.duration || payload.courseTenure || '12';
-  const dateOfBirth = payload.date_of_birth || '2000-01-15';
+  let dateOfBirth = payload.date_of_birth || '2000-01-15';
+  if (typeof dateOfBirth === 'string') {
+    dateOfBirth = dateOfBirth.split('T')[0].split(' ')[0];
+  }
   const primaryContactName = payload.primary_contact_name || fullname;
   const primaryContactNumber = payload.primary_contact_number || payload.mobile_num || '';
   const primaryContactEmail = payload.primary_contact_email || payload.e_mail || '';
@@ -92,7 +95,8 @@ async function handleJodoFlex(config, payload) {
   console.log(`[Jodo Flex] Resolved Grade: "${resolvedGrade}" for Product: "${product}", Tenure: "${tenure}"`);
 
   // 2. Resolve Fee Components from config
-  const feeComponents = resolveFeeComponents(product, tenure, payload.amount || payload.course_price);
+  const overrideCourseFee = payload.course_fee !== undefined ? payload.course_fee : (payload.amount !== undefined ? payload.amount : payload.course_price);
+  const feeComponents = resolveFeeComponents(product, tenure, overrideCourseFee, payload.registration_fee);
   console.log(`[Jodo Flex] Resolved Fee Components:`, JSON.stringify(feeComponents));
 
   // 3. Register User in Jodo
@@ -193,6 +197,68 @@ async function handleJodoFlex(config, payload) {
   };
 
   console.log(`[Jodo Flex] Successfully generated student onboarding & redirection response`);
+
+  // Optional background callback to Salesforce Apex REST if configured
+  const sfCallbackUrl = process.env.SF_CALLBACK_URL;
+  const sfToken = process.env.SF_ACCESS_TOKEN;
+  if (sfCallbackUrl && sfToken) {
+    try {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const appliedDateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+      const recordId = payload.recordId || payload.nbfc_crm_app_id || '';
+
+      const sfCallbackPayload = {
+        event_type: 'NBFC_APPLICATION_STATUS',
+        user_details: {
+          phone_number: primaryContactNumber,
+          user_id: payload.user_id || payload.identifier || identifier,
+          country_code: '+91'
+        },
+        co_applicant_id: payload.co_applicant_id || null,
+        applied_datetime: appliedDateTime,
+        nbfc_crm_app_id: recordId,
+        nbfc_name: 'JODO_FLEX',
+        application_id: String(jodoStudentId),
+        application_reference_number: '',
+        nbfc_api_request_details: {
+          create_lead_status: null,
+          create_lead_response: null,
+          register_user_status: 'SUCCESS',
+          register_user_response: JSON.stringify(userRegisterData),
+          register_student_status: 'SUCCESS',
+          register_student_response: JSON.stringify(studentData),
+          upload_co_applicant_photo_response: null,
+          upload_co_applicant_pan_doc_response: null,
+          upload_co_applicant_aadhar_front_doc_response: null,
+          upload_co_applicant_aadhar_back_doc_response: null,
+          upload_co_applicant_bank_doc_response: null,
+          co_applicant_current_address_front_doc_response: null,
+          co_applicant_current_address_back_doc_response: null,
+          co_applicant_business_doc_response: null,
+          get_consent_link_status: null,
+          get_consent_link_response: null
+        }
+      };
+
+      console.log(`[Jodo Flex] Asynchronously posting callback to Salesforce Apex REST: ${sfCallbackUrl}`);
+      fetch(sfCallbackUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sfToken}`
+        },
+        body: JSON.stringify(sfCallbackPayload)
+      }).then(async (sfRes) => {
+        const text = await sfRes.text();
+        console.log(`[Jodo Flex] Salesforce callback response (HTTP ${sfRes.status}):`, text);
+      }).catch((sfErr) => {
+        console.error(`[Jodo Flex] Salesforce callback error:`, sfErr.message);
+      });
+    } catch (err) {
+      console.error(`[Jodo Flex] Error building Salesforce callback:`, err.message);
+    }
+  }
 
   return {
     status: 200,

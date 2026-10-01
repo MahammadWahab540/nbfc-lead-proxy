@@ -5,39 +5,20 @@
  * and maintains configurable fee components.
  */
 
-const productGradeMap = {
-  'IIT-KGP-OCN': {
-    '3': 'IITKGPOCN_-_3_EMI',
-    '6': 'IITKGPOCN_-_6_EMI',
-    '9': 'IITKGPOCN_-_9_EMI',
-    '12': 'IITKGPOCN_-_12_EMI',
-    '18': 'IITKGPOCN_-_18_EMI'
-  },
-  'SMART': {
-    '6': 'SMART_-_6_EMI',
-    '12': 'SMART_-_12_EMI',
-    '18': 'SMART_-_18_EMI',
-    '24': 'SMART_-_24_EMI',
-    '36': 'SMART_-_36_EMI',
-    '48': 'SMART_-_48_EMI',
-    '50': 'SMART_-_50_EMI'
-  },
-  'GENIUS': {
-    '6': 'GENIUS_-_6_EMI',
-    '12': 'GENIUS_-_12_EMI',
-    '18': 'GENIUS_-_18_EMI',
-    '24': 'GENIUS_-_24_EMI',
-    '30': 'GENIUS_-_30_EMI',
-    '36': 'GENIUS_-_36_EMI',
-    '48': 'GENIUS_-_48_EMI',
-    '50': 'GENIUS_-_50_EMI'
-  },
-  'EDGE_PLUS': {
-    '12': 'EDGE_PLUS_12_EMI',
-    '24': 'EDGE_PLUS_24_EMI',
-    '36': 'EDGE_PLUS_36_EMI'
-  }
-};
+// All 46 verified production grades configured for NxtWave in Jodo
+const VALID_JODO_GRADES = new Set([
+  "EDGE_-_12_EMI", "EDGE_-_18_EMI", "EDGE_-_24_EMI", "EDGE_-_30_EMI", "EDGE_-_36_EMI",
+  "EDGE_PLUS_12_EMI", "EDGE_PLUS_24_EMI", "EDGE_PLUS_36_EMI",
+  "GENIUS_-_12_EMI", "GENIUS_-_18_EMI", "GENIUS_-_24_EMI", "GENIUS_-_30_EMI", "GENIUS_-_36_EMI",
+  "GENIUS_-_45_EMI", "GENIUS_-_48_EMI", "GENIUS_-_50_EMI", "GENIUS_-_6_EMI", "GENIUS_-_CUSTOM",
+  "GENIUS_(DP)_-_12_EMI", "GENIUS_(DP)_-_24_EMI", "GENIUS_(DP)_-_36_EMI",
+  "GENUIS_PLUS_12_EMI", "GENUIS_PLUS_24_EMI", "GENUIS_PLUS_36_EMI",
+  "IITKGPOCN_-_12_EMI", "IITKGPOCN_-_18_EMI", "IITKGPOCN_-_3_EMI", "IITKGPOCN_-_6_EMI", "IITKGPOCN_-_9_EMI",
+  "SMART_-_12_EMI", "SMART_-_18_EMI", "SMART_-_24_EMI", "SMART_-_30_EMI", "SMART_-_36_EMI",
+  "SMART_-_45_EMI", "SMART_-_48_EMI", "SMART_-_50_EMI", "SMART_-_6_EMI", "SMART_-_CUSTOM",
+  "SMART_(S)_-_50_EMI", "SMART_PLUS_12_EMI", "SMART_PLUS_24_EMI", "SMART_PLUS_36_EMI",
+  "SMART(DP)_-_12_EMI", "SMART(DP)_-_24_EMI", "SMART(DP)_-_36_EMI"
+]);
 
 const tenureFeeMap = {
   '3': 82000.0,
@@ -48,7 +29,7 @@ const tenureFeeMap = {
 };
 
 const feeComponentConfig = {
-  'IIT-KGP-OCN': {
+  'IITKGPOCN': {
     tenure_fees: { ...tenureFeeMap },
     default_course_fee: 82000.0,
     registration_fee: 0.0
@@ -60,44 +41,97 @@ const feeComponentConfig = {
   }
 };
 
+function normalizeProduct(rawProduct) {
+  if (!rawProduct) return '';
+  let str = rawProduct.toString().trim().toUpperCase();
+
+  // If already an exact valid grade
+  if (VALID_JODO_GRADES.has(str)) return str;
+
+  // Replace any IITOCN variation with IITKGPOCN (as Jodo registers it under IITKGPOCN)
+  str = str.replace(/IIT[-_ ]?OCN/g, 'IITKGPOCN')
+           .replace(/IIT[-_ ]?KGP[-_ ]?OCN/g, 'IITKGPOCN');
+
+  if (VALID_JODO_GRADES.has(str)) return str;
+
+  return str;
+}
+
 /**
  * Resolves Jodo grade code from product and tenure
  */
 function resolveJodoGrade(product, tenure) {
-  if (!product || !tenure) {
-    throw new Error(`Both 'product' and 'Tenure' are required for Jodo Flex. Received product: "${product}", tenure: "${tenure}"`);
+  if (!product && !tenure) {
+    throw new Error(`Both 'product' and 'Tenure' are required for Jodo Flex.`);
   }
 
-  const normalizedProduct = product.toString().trim().toUpperCase();
-  const normalizedTenure = tenure.toString().trim();
+  const rawProduct = (product || '').toString().trim().toUpperCase();
+  const normalized = normalizeProduct(rawProduct);
 
-  // 1. Direct product map lookup
-  if (productGradeMap[normalizedProduct] && productGradeMap[normalizedProduct][normalizedTenure]) {
-    return productGradeMap[normalizedProduct][normalizedTenure];
+  // 1. Direct match if product contains the full valid grade
+  if (VALID_JODO_GRADES.has(normalized)) {
+    return normalized;
   }
 
-  // 2. Fallback prefix cleaning: e.g. "IIT-KGP-OCN" -> "IITKGPOCN_-_<tenure>_EMI"
-  const sanitizedPrefix = normalizedProduct.replace(/[^A-Z0-9]/g, '');
-  return `${sanitizedPrefix}_-_${normalizedTenure}_EMI`;
+  // 2. Extract tenure digits
+  let cleanTenure = tenure ? tenure.toString().trim().replace(/[^0-9]/g, '') : '';
+  if (!cleanTenure) {
+    const tenureMatch = rawProduct.match(/(\d+)\s*(?:EMI|MONTHS?|M)?$/i) || rawProduct.match(/(\d+)/);
+    if (tenureMatch) {
+      cleanTenure = tenureMatch[1];
+    }
+  }
+
+  // 3. Map canonical prefix
+  let prefix = normalized.replace(/[^A-Z0-9]/g, '');
+  if ((prefix.includes('IIT') && prefix.includes('OCN')) || prefix === 'OCN') {
+    prefix = 'IITKGPOCN';
+  } else if (prefix.startsWith('SMART')) {
+    if (prefix.includes('PLUS')) prefix = 'SMART_PLUS';
+    else if (prefix.includes('DP')) prefix = 'SMART(DP)';
+    else prefix = 'SMART';
+  } else if (prefix.startsWith('GENIUS') || prefix.startsWith('GENUIS')) {
+    if (prefix.includes('PLUS')) prefix = 'GENUIS_PLUS';
+    else if (prefix.includes('DP')) prefix = 'GENIUS_(DP)';
+    else prefix = 'GENIUS';
+  } else if (prefix.startsWith('EDGE')) {
+    if (prefix.includes('PLUS')) prefix = 'EDGE_PLUS';
+    else prefix = 'EDGE';
+  }
+
+  // 4. Check candidates against valid production grades
+  const candidateHyphen = `${prefix}_-_${cleanTenure}_EMI`;
+  if (VALID_JODO_GRADES.has(candidateHyphen)) {
+    return candidateHyphen;
+  }
+
+  const candidateNoHyphen = `${prefix}_${cleanTenure}_EMI`;
+  if (VALID_JODO_GRADES.has(candidateNoHyphen)) {
+    return candidateNoHyphen;
+  }
+
+  return candidateHyphen;
 }
 
 /**
  * Fetches fee components for a given product or tenure
  */
-function resolveFeeComponents(product, tenure, overrideCourseFee = null) {
-  const normalizedProduct = (product || 'DEFAULT').toString().trim().toUpperCase();
-  const normalizedTenure = tenure ? tenure.toString().trim().replace(/[^0-9]/g, '') : '';
-  const baseConfig = feeComponentConfig[normalizedProduct] || feeComponentConfig['DEFAULT'];
+function resolveFeeComponents(product, tenure, overrideCourseFee = null, overrideRegFee = null) {
+  let cleanTenure = tenure ? tenure.toString().trim().replace(/[^0-9]/g, '') : '';
 
   let courseFee;
-  if (baseConfig.tenure_fees && baseConfig.tenure_fees[normalizedTenure] !== undefined) {
-    // Tenure-based repayment/course fee mapping has priority
-    courseFee = baseConfig.tenure_fees[normalizedTenure];
-  } else if (overrideCourseFee !== null && !isNaN(Number(overrideCourseFee))) {
+  if (overrideCourseFee !== null && overrideCourseFee !== undefined && !isNaN(Number(overrideCourseFee)) && Number(overrideCourseFee) > 0) {
+    // Explicit course fee passed from Salesforce has highest precedence
     courseFee = Number(overrideCourseFee);
+  } else if (tenureFeeMap[cleanTenure] !== undefined) {
+    courseFee = tenureFeeMap[cleanTenure];
   } else {
-    courseFee = baseConfig.default_course_fee || 82000.0;
+    courseFee = 82000.0;
   }
+
+  const regFee = (overrideRegFee !== null && overrideRegFee !== undefined && !isNaN(Number(overrideRegFee)))
+    ? Number(overrideRegFee)
+    : 0.0;
 
   return [
     {
@@ -106,13 +140,14 @@ function resolveFeeComponents(product, tenure, overrideCourseFee = null) {
     },
     {
       component_type: 'REGISTRATION_FEE',
-      fee_amount: baseConfig.registration_fee || 0.0
+      fee_amount: regFee
     }
   ];
 }
 
 module.exports = {
-  productGradeMap,
+  VALID_JODO_GRADES,
+  tenureFeeMap,
   feeComponentConfig,
   resolveJodoGrade,
   resolveFeeComponents

@@ -105,7 +105,7 @@ async function handleLeadCreation(req, res) {
     });
   }
 
-  console.log(`[Lead Request] Routing to Lender: ${lenderKey} (order_id: "${payload.order_id || 'N/A'}", mobile: "${payload.mobile_num || 'N/A'}")`);
+  console.log(`[Lead Request] Routing to Lender: ${lenderKey} (recordId: "${payload.recordId || payload.nbfc_crm_app_id || 'N/A'}", identifier: "${payload.identifier || payload.order_id || 'N/A'}", mobile: "${payload.primary_contact_number || payload.mobile_num || 'N/A'}")`);
 
   try {
     const { status, data, durationMs } = await dispatchToLender(lenderKey, config, payload);

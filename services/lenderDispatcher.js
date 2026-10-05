@@ -5,6 +5,51 @@
 
 const { resolveJodoGrade, resolveFeeComponents } = require('../config/jodoProductConfig');
 
+let cachedSfToken = null;
+let cachedSfTokenExpiry = 0;
+
+async function getSalesforceAccessToken() {
+  const tokenUrl = process.env.SF_TOKEN_URL;
+  const clientId = process.env.SF_CLIENT_ID;
+  const clientSecret = process.env.SF_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret || !tokenUrl) {
+    return process.env.SF_ACCESS_TOKEN || null;
+  }
+
+  if (cachedSfToken && Date.now() < (cachedSfTokenExpiry - 60000)) {
+    return cachedSfToken;
+  }
+
+  try {
+    console.log('[Salesforce OAuth] Generating fresh token via client_credentials...');
+    const params = new URLSearchParams();
+    params.append('grant_type', 'client_credentials');
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+
+    const res = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OAuth HTTP ${res.status}: ${errText}`);
+    }
+
+    const data = await res.json();
+    cachedSfToken = data.access_token;
+    cachedSfTokenExpiry = Date.now() + (3500 * 1000);
+    console.log('[Salesforce OAuth] Successfully obtained fresh access token.');
+    return cachedSfToken;
+  } catch (error) {
+    console.error('[Salesforce OAuth] Failed to get OAuth token:', error.message);
+    return process.env.SF_ACCESS_TOKEN || null;
+  }
+}
+
 /**
  * Handles TechFino Lead Creation Flow
  */
@@ -200,64 +245,69 @@ async function handleJodoFlex(config, payload) {
 
   // Optional background callback to Salesforce Apex REST if configured
   const sfCallbackUrl = process.env.SF_CALLBACK_URL;
-  const sfToken = process.env.SF_ACCESS_TOKEN;
-  if (sfCallbackUrl && sfToken) {
-    try {
-      const now = new Date();
-      const pad = (n) => String(n).padStart(2, '0');
-      const appliedDateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-      const recordId = payload.recordId || payload.nbfc_crm_app_id || '';
-
-      const sfCallbackPayload = {
-        event_type: 'NBFC_APPLICATION_STATUS',
-        user_details: {
-          phone_number: primaryContactNumber,
-          user_id: payload.user_id || payload.identifier || identifier,
-          country_code: '+91'
-        },
-        co_applicant_id: payload.co_applicant_id || null,
-        applied_datetime: appliedDateTime,
-        nbfc_crm_app_id: recordId,
-        nbfc_name: 'JODO_FLEX',
-        application_id: String(jodoStudentId),
-        application_reference_number: '',
-        nbfc_api_request_details: {
-          create_lead_status: null,
-          create_lead_response: null,
-          register_user_status: 'SUCCESS',
-          register_user_response: JSON.stringify(userRegisterData),
-          register_student_status: 'SUCCESS',
-          register_student_response: JSON.stringify(studentData),
-          upload_co_applicant_photo_response: null,
-          upload_co_applicant_pan_doc_response: null,
-          upload_co_applicant_aadhar_front_doc_response: null,
-          upload_co_applicant_aadhar_back_doc_response: null,
-          upload_co_applicant_bank_doc_response: null,
-          co_applicant_current_address_front_doc_response: null,
-          co_applicant_current_address_back_doc_response: null,
-          co_applicant_business_doc_response: null,
-          get_consent_link_status: null,
-          get_consent_link_response: null
+  if (sfCallbackUrl) {
+    (async () => {
+      try {
+        const sfToken = await getSalesforceAccessToken();
+        if (!sfToken) {
+          console.warn('[Jodo Flex] Skipping Salesforce callback: No valid access token available.');
+          return;
         }
-      };
 
-      console.log(`[Jodo Flex] Asynchronously posting callback to Salesforce Apex REST: ${sfCallbackUrl}`);
-      fetch(sfCallbackUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${sfToken}`
-        },
-        body: JSON.stringify(sfCallbackPayload)
-      }).then(async (sfRes) => {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, '0');
+        const appliedDateTime = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+        const recordId = payload.recordId || payload.nbfc_crm_app_id || '';
+
+        const sfCallbackPayload = {
+          event_type: 'NBFC_APPLICATION_STATUS',
+          user_details: {
+            phone_number: primaryContactNumber,
+            user_id: payload.user_id || payload.identifier || identifier,
+            country_code: '+91'
+          },
+          co_applicant_id: payload.co_applicant_id || null,
+          applied_datetime: appliedDateTime,
+          nbfc_crm_app_id: recordId,
+          nbfc_name: 'JODO_FLEX',
+          application_id: String(jodoStudentId),
+          application_reference_number: '',
+          nbfc_api_request_details: {
+            create_lead_status: null,
+            create_lead_response: null,
+            register_user_status: 'SUCCESS',
+            register_user_response: JSON.stringify(userRegisterData),
+            register_student_status: 'SUCCESS',
+            register_student_response: JSON.stringify(studentData),
+            upload_co_applicant_photo_response: null,
+            upload_co_applicant_pan_doc_response: null,
+            upload_co_applicant_aadhar_front_doc_response: null,
+            upload_co_applicant_aadhar_back_doc_response: null,
+            upload_co_applicant_bank_doc_response: null,
+            co_applicant_current_address_front_doc_response: null,
+            co_applicant_current_address_back_doc_response: null,
+            co_applicant_business_doc_response: null,
+            get_consent_link_status: null,
+            get_consent_link_response: null
+          }
+        };
+
+        console.log(`[Jodo Flex] Asynchronously posting callback to Salesforce Apex REST: ${sfCallbackUrl}`);
+        const sfRes = await fetch(sfCallbackUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sfToken}`
+          },
+          body: JSON.stringify(sfCallbackPayload)
+        });
+
         const text = await sfRes.text();
         console.log(`[Jodo Flex] Salesforce callback response (HTTP ${sfRes.status}):`, text);
-      }).catch((sfErr) => {
-        console.error(`[Jodo Flex] Salesforce callback error:`, sfErr.message);
-      });
-    } catch (err) {
-      console.error(`[Jodo Flex] Error building Salesforce callback:`, err.message);
-    }
+      } catch (err) {
+        console.error(`[Jodo Flex] Error in Salesforce callback:`, err.message);
+      }
+    })();
   }
 
   return {

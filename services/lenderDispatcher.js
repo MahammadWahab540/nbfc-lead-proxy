@@ -62,7 +62,7 @@ async function handleTechFino(config, payload) {
 
   // Auto-default branch if missing or empty
   if (!cleanPayload.branch) {
-    cleanPayload.branch = '623';
+    cleanPayload.branch = '712';
   }
 
   const { username, password, apiKey } = config.credentials;

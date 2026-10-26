@@ -50,6 +50,27 @@ async function getSalesforceAccessToken() {
   }
 }
 
+const EMPLOYMENT_TYPE_MAP = {
+  0: 'SALARIED',
+  '0': 'SALARIED',
+  'SALARIED': 'SALARIED',
+  1: 'SELF_EMPLOYED',
+  '1': 'SELF_EMPLOYED',
+  'SELF_EMPLOYED': 'SELF_EMPLOYED',
+  2: 'STUDENT',
+  '2': 'STUDENT',
+  'STUDENT': 'STUDENT',
+  3: 'HOME_MAKER',
+  '3': 'HOME_MAKER',
+  'HOME_MAKER': 'HOME_MAKER',
+  4: 'RETIRED',
+  '4': 'RETIRED',
+  'RETIRED': 'RETIRED',
+  5: 'OTHER',
+  '5': 'OTHER',
+  'OTHER': 'OTHER'
+};
+
 /**
  * Handles TechFino Lead Creation Flow
  */
@@ -65,6 +86,13 @@ async function handleTechFino(config, payload) {
     cleanPayload.branch = '712';
   }
 
+  // Map employementType (or employmentType) to standardized NBFC enum string
+  const rawEmpType = cleanPayload.employementType !== undefined ? cleanPayload.employementType : cleanPayload.employmentType;
+  if (rawEmpType !== undefined && rawEmpType !== null && rawEmpType !== '') {
+    cleanPayload.employementType = EMPLOYMENT_TYPE_MAP[rawEmpType] || (typeof rawEmpType === 'string' ? rawEmpType.toUpperCase() : String(rawEmpType));
+    delete cleanPayload.employmentType;
+  }
+
   const { username, password, apiKey } = config.credentials;
   const basicAuth = Buffer.from(`${username}:${password}`).toString('base64');
 
@@ -75,7 +103,7 @@ async function handleTechFino(config, payload) {
   };
 
   const startTime = Date.now();
-  console.log(`[Dispatcher -> TECHFINO] Sending lead to ${config.apiUrl}`);
+  console.log(`[Dispatcher -> TECHFINO] Sending lead to ${config.apiUrl} with payload:`, JSON.stringify(cleanPayload));
 
   const response = await fetch(config.apiUrl, {
     method: 'POST',
@@ -330,6 +358,13 @@ async function handleAuxilo(config, payload) {
   delete cleanPayload.nbfc;
   delete cleanPayload.NBFC_name;
   delete cleanPayload.partner;
+
+  // Map employementType (or employmentType) to standardized NBFC enum string
+  const rawEmpType = cleanPayload.employementType !== undefined ? cleanPayload.employementType : cleanPayload.employmentType;
+  if (rawEmpType !== undefined && rawEmpType !== null && rawEmpType !== '') {
+    cleanPayload.employementType = EMPLOYMENT_TYPE_MAP[rawEmpType] || (typeof rawEmpType === 'string' ? rawEmpType.toUpperCase() : String(rawEmpType));
+    delete cleanPayload.employmentType;
+  }
 
   const headers = { 'Content-Type': 'application/json' };
   const { token, apiKey, username, password } = config.credentials;
